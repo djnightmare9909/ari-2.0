@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { ModelMode } from '../types';
 import { Icon } from './Icon';
@@ -8,8 +9,8 @@ interface ModeSelectorProps {
 }
 
 const modes: { id: ModelMode; name: string; icon: React.ComponentProps<typeof Icon>['name']; description: string }[] = [
-    { id: 'flash', name: 'Flash', icon: 'bolt', description: 'Fast responses for general tasks.' },
-    { id: 'pro', name: 'Pro', icon: 'brain', description: 'Advanced reasoning for complex problems.' },
+    { id: 'flash', name: 'Flash 2.5', icon: 'bolt', description: 'Fast responses with Gemini 2.5 Flash.' },
+    { id: 'pro', name: 'Pro 3.0', icon: 'brain', description: 'Advanced reasoning with Gemini 3.0 Pro.' },
 ];
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({ currentMode, onModeChange }) => {

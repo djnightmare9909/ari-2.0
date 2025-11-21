@@ -34,7 +34,7 @@ const ChatView: React.FC<ChatViewProps> = ({ chat, isLoading, onSend, mode, setM
     return (
         <div className="flex flex-col flex-1 h-full">
             <header className="flex items-center justify-between p-4 bg-slate-900/50 backdrop-blur-md border-b border-slate-700 z-10">
-                <h2 className="text-lg font-semibold truncate md:ml-10">{chat.title}</h2>
+                <h2 className="text-lg font-semibold truncate ml-12">{chat.title}</h2>
                 <ModeSelector currentMode={mode} onModeChange={setMode} />
             </header>
 

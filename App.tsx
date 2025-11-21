@@ -11,7 +11,7 @@ import { Icon } from './components/Icon';
 const App: React.FC = () => {
     const [chats, setChats] = useState<ChatSession[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [currentMode, setCurrentMode] = useState<ModelMode>('flash');
 
@@ -36,6 +36,7 @@ const App: React.FC = () => {
         };
         setChats(prev => [newChat, ...prev]);
         setActiveChatId(newChat.id);
+        // Optional: Close sidebar on new chat on mobile, but might want to keep open to see it added.
     }, []);
 
     const handleSelectChat = (id: string) => {
@@ -43,6 +44,7 @@ const App: React.FC = () => {
         if (selectedChat) {
             setActiveChatId(id);
             setCurrentMode(selectedChat.mode);
+            setIsSidebarOpen(false); // Close sidebar on selection for mobile feel
         }
     };
     
@@ -130,7 +132,7 @@ const App: React.FC = () => {
     };
     
     return (
-        <div className="flex h-screen w-full bg-slate-900 text-slate-100 font-sans">
+        <div className="flex h-screen w-full bg-slate-900 text-slate-100 font-sans overflow-hidden">
             <Sidebar
                 chats={chats}
                 activeChatId={activeChatId}
@@ -140,12 +142,13 @@ const App: React.FC = () => {
                 isOpen={isSidebarOpen}
                 setIsOpen={setIsSidebarOpen}
             />
-            <div className="flex flex-col flex-1 relative">
+            <div className="flex flex-col flex-1 relative min-w-0 w-full h-full">
                 <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute top-4 left-4 z-20 p-2 rounded-full bg-slate-800/50 hover:bg-slate-700/70 transition-colors md:hidden"
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="absolute top-3 left-3 z-20 p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-all shadow-lg backdrop-blur-sm border border-slate-700"
+                    aria-label="Open Menu"
                 >
-                    <Icon name={isSidebarOpen ? 'close' : 'menu'} className="w-6 h-6"/>
+                    <Icon name="menu" className="w-5 h-5"/>
                 </button>
                 {activeChat ? (
                     <ChatView
