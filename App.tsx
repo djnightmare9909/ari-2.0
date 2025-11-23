@@ -36,7 +36,7 @@ const App: React.FC = () => {
         };
         setChats(prev => [newChat, ...prev]);
         setActiveChatId(newChat.id);
-        // Optional: Close sidebar on new chat on mobile, but might want to keep open to see it added.
+        setIsSidebarOpen(false); 
     }, []);
 
     const handleSelectChat = (id: string) => {
@@ -44,7 +44,7 @@ const App: React.FC = () => {
         if (selectedChat) {
             setActiveChatId(id);
             setCurrentMode(selectedChat.mode);
-            setIsSidebarOpen(false); // Close sidebar on selection for mobile feel
+            setIsSidebarOpen(false);
         }
     };
     
@@ -120,7 +120,7 @@ const App: React.FC = () => {
                     const newMessages = [...chat.messages];
                     const lastMessage = newMessages[newMessages.length - 1];
                     if (lastMessage.role === 'model') {
-                        lastMessage.parts[0].text = "Sorry, I encountered an error. Please try again.";
+                        lastMessage.parts[0].text = "I'm experiencing a disruption in my thought process. Can we try that again?";
                     }
                     return { ...chat, messages: newMessages };
                 }
@@ -145,8 +145,8 @@ const App: React.FC = () => {
             <div className="flex flex-col flex-1 relative min-w-0 w-full h-full">
                 <button
                     onClick={() => setIsSidebarOpen(true)}
-                    className="absolute top-3 left-3 z-20 p-2.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-all shadow-lg backdrop-blur-sm border border-slate-700"
-                    aria-label="Open Menu"
+                    className="absolute top-4 left-4 z-20 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700/80 text-slate-400 hover:text-white transition-all backdrop-blur-sm border border-slate-700/50"
+                    aria-label="Open Memory"
                 >
                     <Icon name="menu" className="w-5 h-5"/>
                 </button>
@@ -161,8 +161,8 @@ const App: React.FC = () => {
                 ) : (
                     <div className="flex flex-1 items-center justify-center">
                         <div className="text-center">
-                            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">Recursive Reasoning Engine</h1>
-                            <p className="text-slate-400">Start a new chat to begin.</p>
+                            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">Ari</h1>
+                            <p className="text-slate-400">Initialize sequence...</p>
                         </div>
                     </div>
                 )}

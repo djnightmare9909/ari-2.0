@@ -13,7 +13,13 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const modelConfig: Record<ModelMode, { model: string; config?: any }> = {
     flash: { model: 'gemini-2.5-flash' },
-    pro: { model: 'gemini-3-pro-preview', config: { thinkingConfig: { thinkingBudget: 32768 } } },
+    // Using gemini-3-pro-preview for Thinking mode as requested (best available for reasoning)
+    thinking: { 
+        model: 'gemini-3-pro-preview', 
+        config: { 
+            thinkingConfig: { thinkingBudget: 32768 } 
+        } 
+    },
 };
 
 function formatMessagesForApi(messages: Message[]): Content[] {

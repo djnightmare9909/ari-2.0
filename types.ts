@@ -1,7 +1,7 @@
 
 export type MessageRole = 'user' | 'model';
 
-export type ModelMode = 'flash' | 'pro';
+export type ModelMode = 'flash' | 'thinking';
 
 export interface MessagePart {
     text?: string;

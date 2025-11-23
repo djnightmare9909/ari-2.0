@@ -1,33 +1,34 @@
 
 import React from 'react';
 import type { ModelMode } from '../types';
-import { Icon } from './Icon';
 
 interface ModeSelectorProps {
     currentMode: ModelMode;
     onModeChange: (mode: ModelMode) => void;
 }
 
-const modes: { id: ModelMode; name: string; icon: React.ComponentProps<typeof Icon>['name']; description: string }[] = [
-    { id: 'flash', name: 'Flash 2.5', icon: 'bolt', description: 'Fast responses with Gemini 2.5 Flash.' },
-    { id: 'pro', name: 'Pro 3.0', icon: 'brain', description: 'Advanced reasoning with Gemini 3.0 Pro.' },
+const modes: { id: ModelMode; name: string; description: string }[] = [
+    { id: 'flash', name: 'Flash', description: 'Quick, spontaneous responses.' },
+    { id: 'thinking', name: 'Thinking', description: 'Deep, autonomous reasoning.' },
 ];
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({ currentMode, onModeChange }) => {
     return (
-        <div className="flex items-center bg-slate-800 rounded-full p-1 border border-slate-700">
+        <div className="flex items-center space-x-1 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50">
             {modes.map(mode => (
                 <button
                     key={mode.id}
                     onClick={() => onModeChange(mode.id)}
                     className={`
-                        flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-full transition-colors
-                        ${currentMode === mode.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}
+                        px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 uppercase tracking-wider
+                        ${currentMode === mode.id 
+                            ? 'bg-slate-700 text-white shadow-sm ring-1 ring-slate-600' 
+                            : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                        }
                     `}
                     title={mode.description}
                 >
-                   <Icon name={mode.icon} className="w-4 h-4"/>
-                   <span className="hidden md:inline">{mode.name}</span>
+                   {mode.name}
                 </button>
             ))}
         </div>
