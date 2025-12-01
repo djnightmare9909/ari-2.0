@@ -66,6 +66,7 @@ const App: React.FC = () => {
         }
     };
 
+    // Standard Chat Send (Text/Image Mode)
     const handleSend = async (prompt: string, image: { data: string; mimeType: string } | null, autoSpeak: boolean = false) => {
         if (!activeChat) return;
 
@@ -84,9 +85,9 @@ const App: React.FC = () => {
             });
         }
 
-        // 2. Add the Image part
+        // 2. Add the Image part (Legacy 'image' support for ChatInput, technically now 'file' generic)
         if (image) {
-            newParts.push({ image });
+            newParts.push({ file: image });
         }
 
         // 3. Add the Text part
@@ -145,7 +146,7 @@ const App: React.FC = () => {
                 }));
             }
 
-            // AUTO-SPEAK: Trigger TTS if this was a live voice interaction
+            // AUTO-SPEAK: Trigger TTS if this was a live voice interaction (Legacy Live Mode)
             if (autoSpeak && fullResponse) {
                 speak(fullResponse);
             }
@@ -169,6 +170,40 @@ const App: React.FC = () => {
         }
     };
     
+    // Callback for Gemini Live API to save history
+    const handleLiveInteraction = (userText: string, modelText: string) => {
+        if (!activeChatId) return;
+        
+        const userMsg: Message = {
+            id: uuidv4(),
+            role: 'user',
+            parts: [{ text: userText }],
+            createdAt: new Date(),
+        };
+        const modelMsg: Message = {
+            id: uuidv4(),
+            role: 'model',
+            parts: [{ text: modelText }],
+            createdAt: new Date(),
+        };
+
+        setChats(prevChats => prevChats.map(chat => {
+            if (chat.id === activeChatId) {
+                // Determine title if it's the first message
+                let newTitle = chat.title;
+                if (chat.messages.length === 0) {
+                    newTitle = userText.length > 30 ? userText.substring(0, 27) + '...' : userText;
+                }
+                return { 
+                    ...chat, 
+                    title: newTitle,
+                    messages: [...chat.messages, userMsg, modelMsg] 
+                };
+            }
+            return chat;
+        }));
+    };
+
     return (
         <div className="flex h-screen w-full bg-slate-900 text-slate-100 font-sans overflow-hidden">
             <Sidebar
@@ -192,11 +227,14 @@ const App: React.FC = () => {
                     <ChatView
                         chat={activeChat}
                         isLoading={isLoading}
-                        onSend={handleSend}
+                        onSend={(p, i) => handleSend(p, i, false)}
                         mode={currentMode}
                         setMode={setCurrentMode}
                         isLiveMode={isLiveMode}
-                        setLiveMode={setIsLiveMode}
+                        setLiveMode={(val) => {
+                            if (!val) cancel(); // Stop TTS if closing
+                            setIsLiveMode(val);
+                        }}
                         ttsState={{ speak, cancel, isPlaying, isLoading: isTTSLoading }}
                     />
                 ) : (
@@ -210,13 +248,11 @@ const App: React.FC = () => {
                 
                 {isLiveMode && (
                     <LivePerception 
-                        onVoiceInput={(text, image) => handleSend(text, image || null, true)}
                         onClose={() => {
                             setIsLiveMode(false);
-                            cancel(); // Stop speaking when closing live mode
+                            cancel(); 
                         }}
-                        stopAudio={cancel}
-                        isProcessing={isLoading}
+                        onInteractionComplete={handleLiveInteraction}
                     />
                 )}
             </div>

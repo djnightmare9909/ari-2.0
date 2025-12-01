@@ -9,7 +9,8 @@ if (!API_KEY) {
     throw new Error("API_KEY environment variable not set");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Exporting the instance for use in LivePerception
+export const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const modelConfig: Record<ModelMode, { model: string; config?: any }> = {
     flash: { model: 'gemini-2.5-flash' },
@@ -30,11 +31,11 @@ function formatMessagesForApi(messages: Message[]): Content[] {
         const parts: Part[] = msg.parts.flatMap(part => {
             const apiParts: Part[] = [];
             
-            if (part.image) {
-                apiParts.push({
+            if (part.file) { // Changed generic 'file' handling
+                 apiParts.push({
                     inlineData: {
-                        mimeType: part.image.mimeType,
-                        data: part.image.data
+                        mimeType: part.file.mimeType,
+                        data: part.file.data
                     }
                 });
             }
