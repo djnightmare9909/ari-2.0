@@ -18,6 +18,7 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
     const landmarkerRef = useRef<FaceLandmarker | null>(null);
     const attentionRef = useRef<'focus' | 'distracted'>('distracted'); // Ref for immediate access in event loops
     const requestRef = useRef<number>(0);
+    const isMountedRef = useRef<boolean>(true); // Track if component is mounted
 
     // Refs for callbacks to prevent stale closures in event listeners
     const onVoiceInputRef = useRef(onVoiceInput);
@@ -33,11 +34,16 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
 
     // 1. Initialize Vision (MediaPipe)
     useEffect(() => {
+        isMountedRef.current = true;
+
         const initVision = async () => {
             try {
                 const vision = await FilesetResolver.forVisionTasks(
                     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
                 );
+                // Check mount status after async load
+                if (!isMountedRef.current) return;
+
                 landmarkerRef.current = await FaceLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
@@ -47,7 +53,9 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
                     runningMode: "VIDEO",
                     numFaces: 1
                 });
-                startCamera();
+                if (isMountedRef.current) {
+                    startCamera();
+                }
             } catch (error) {
                 console.error("Failed to init vision:", error);
             }
@@ -55,12 +63,17 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
         initVision();
 
         return () => {
+            isMountedRef.current = false; // Mark component as unmounted
+
             if (videoRef.current && videoRef.current.srcObject) {
                 const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
                 tracks.forEach(t => t.stop());
             }
             if (recognitionRef.current) {
-                recognitionRef.current.stop();
+                // Prevent the onend handler from restarting the service
+                recognitionRef.current.onend = null;
+                // Abort forces an immediate stop without returning final results
+                recognitionRef.current.abort();
             }
             if (requestRef.current) {
                 cancelAnimationFrame(requestRef.current);
@@ -72,6 +85,12 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false }); // Audio handled by SpeechRec
+            if (!isMountedRef.current) {
+                // If unmounted during await, stop tracks immediately
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+            
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 videoRef.current.addEventListener("loadeddata", predictWebcam);
@@ -106,7 +125,7 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
 
     // 3. Vision Loop
     const predictWebcam = async () => {
-        if (!landmarkerRef.current || !videoRef.current) return;
+        if (!landmarkerRef.current || !videoRef.current || !isMountedRef.current) return;
         
         const startTimeMs = performance.now();
         if (videoRef.current.currentTime > 0) {
@@ -140,7 +159,9 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
                 attentionRef.current = 'distracted';
             }
         }
-        requestRef.current = requestAnimationFrame(predictWebcam);
+        if (isMountedRef.current) {
+            requestRef.current = requestAnimationFrame(predictWebcam);
+        }
     };
 
     // 4. Speech Recognition Logic
@@ -155,7 +176,7 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
 
         // INTERRUPTION LOGIC: If the user starts talking, silence the AI.
         recognition.onspeechstart = () => {
-            stopAudioRef.current();
+            if (stopAudioRef.current) stopAudioRef.current();
         };
 
         recognition.onresult = (event: any) => {
@@ -166,14 +187,16 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
             if (isFinal) {
                 // THE GATE: Only process if looking at the camera
                 if (attentionRef.current === 'focus') {
-                    stopAudioRef.current(); // Ensure silence before processing
+                    if (stopAudioRef.current) stopAudioRef.current(); // Ensure silence before processing
                     setLastTranscript(transcript);
                     
                     // Capture visual context
                     const image = captureFrame();
                     
                     // Send to brain
-                    onVoiceInputRef.current(transcript, image);
+                    if (onVoiceInputRef.current) {
+                        onVoiceInputRef.current(transcript, image);
+                    }
                 } else {
                     console.log("Ignored speech (looking away):", transcript);
                 }
@@ -181,6 +204,9 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
         };
 
         recognition.onend = () => {
+            // CRITICAL: Only restart if the component is still mounted.
+            if (!isMountedRef.current) return;
+
             // Auto restart for "always listening"
              try {
                 recognition.start();
@@ -189,8 +215,12 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
             }
         };
 
-        recognition.start();
-        recognitionRef.current = recognition;
+        try {
+            recognition.start();
+            recognitionRef.current = recognition;
+        } catch (e) {
+            console.error("Speech recognition start failed", e);
+        }
     };
 
     const borderColor = attentionState === 'focus' 
