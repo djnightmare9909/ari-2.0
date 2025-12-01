@@ -4,16 +4,20 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { Message } from '../types';
 import { Icon } from './Icon';
-import { useTTS } from '../hooks/useTTS';
 
 interface ChatMessageProps {
     message: Message;
     isStreaming: boolean;
+    ttsState: {
+        speak: (text: string) => void;
+        isPlaying: boolean;
+        isLoading: boolean;
+    }
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, ttsState }) => {
     const { role, parts } = message;
-    const { speak, isPlaying, isLoading: isTTSLoading } = useTTS();
+    const { speak, isPlaying, isLoading: isTTSLoading } = ttsState;
     const isModel = role === 'model';
 
     const parsedHtml = (text: string) => {

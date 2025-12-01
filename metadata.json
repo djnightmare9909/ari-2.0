@@ -2,6 +2,7 @@
   "name": "Recursive Reasoning Engine",
   "description": "A sophisticated chat interface powered by the WFGY Core Flagship v2.0 reasoning model and Gemini, enabling complex, human-like thought and interaction.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }

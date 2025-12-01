@@ -5,8 +5,10 @@ import type { ChatSession, Message, ModelMode } from './types';
 import { generateResponseStream } from './services/geminiService';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
+import LivePerception from './components/LivePerception';
 import { DEFAULT_CHAT_TITLE } from './constants';
 import { Icon } from './components/Icon';
+import { useTTS } from './hooks/useTTS';
 
 const App: React.FC = () => {
     const [chats, setChats] = useState<ChatSession[]>([]);
@@ -14,6 +16,10 @@ const App: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [currentMode, setCurrentMode] = useState<ModelMode>('flash');
+    
+    // Live Perception State
+    const [isLiveMode, setIsLiveMode] = useState(false);
+    const { speak, cancel, isPlaying, isLoading: isTTSLoading } = useTTS();
 
     useEffect(() => {
         // On initial load, create a new chat
@@ -60,8 +66,11 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSend = async (prompt: string, image: { data: string; mimeType: string } | null) => {
+    const handleSend = async (prompt: string, image: { data: string; mimeType: string } | null, autoSpeak: boolean = false) => {
         if (!activeChat) return;
+
+        // Stop any current speech when sending a new message
+        cancel();
 
         setIsLoading(true);
         const userMessage: Message = {
@@ -91,9 +100,10 @@ const App: React.FC = () => {
                 : chat
         ));
 
+        let fullResponse = '';
+
         try {
             const stream = await generateResponseStream(updatedMessages.slice(0, -1), currentMode);
-            let fullResponse = '';
             
             for await (const chunk of stream) {
                 const chunkText = chunk.text;
@@ -113,6 +123,12 @@ const App: React.FC = () => {
                     return chat;
                 }));
             }
+
+            // AUTO-SPEAK: Trigger TTS if this was a live voice interaction
+            if (autoSpeak && fullResponse) {
+                speak(fullResponse);
+            }
+
         } catch (error) {
             console.error("Error generating response:", error);
             setChats(prevChats => prevChats.map(chat => {
@@ -126,6 +142,7 @@ const App: React.FC = () => {
                 }
                 return chat;
             }));
+            if (autoSpeak) speak("I'm experiencing a disruption in my thought process.");
         } finally {
             setIsLoading(false);
         }
@@ -157,6 +174,9 @@ const App: React.FC = () => {
                         onSend={handleSend}
                         mode={currentMode}
                         setMode={setCurrentMode}
+                        isLiveMode={isLiveMode}
+                        setLiveMode={setIsLiveMode}
+                        ttsState={{ speak, cancel, isPlaying, isLoading: isTTSLoading }}
                     />
                 ) : (
                     <div className="flex flex-1 items-center justify-center">
@@ -165,6 +185,18 @@ const App: React.FC = () => {
                             <p className="text-slate-400">Initialize sequence...</p>
                         </div>
                     </div>
+                )}
+                
+                {isLiveMode && (
+                    <LivePerception 
+                        onVoiceInput={(text) => handleSend(text, null, true)}
+                        onClose={() => {
+                            setIsLiveMode(false);
+                            cancel(); // Stop speaking when closing live mode
+                        }}
+                        stopAudio={cancel}
+                        isProcessing={isLoading}
+                    />
                 )}
             </div>
         </div>
