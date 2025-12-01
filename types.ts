@@ -9,6 +9,8 @@ export interface MessagePart {
         data: string;
         mimeType: string;
     };
+    // If true, this part is for the model's eyes only and won't be rendered in the UI bubble
+    isInternal?: boolean;
 }
 
 export interface Message {

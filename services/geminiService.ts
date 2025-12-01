@@ -25,17 +25,26 @@ const modelConfig: Record<ModelMode, { model: string; config?: any }> = {
 function formatMessagesForApi(messages: Message[]): Content[] {
     const history: Content[] = [];
     messages.forEach(msg => {
-        const parts: Part[] = msg.parts.map(part => {
+        // flatMap allows one MessagePart (internal) to become multiple API Parts (e.g. Image + Text)
+        // or allows us to skip parts if needed (though we filter logic inside).
+        const parts: Part[] = msg.parts.flatMap(part => {
+            const apiParts: Part[] = [];
+            
             if (part.image) {
-                return {
+                apiParts.push({
                     inlineData: {
                         mimeType: part.image.mimeType,
                         data: part.image.data
                     }
-                };
+                });
             }
-            return { text: part.text || '' };
-        }).filter(p => (p.text && p.text.trim() !== '') || 'inlineData' in p);
+            
+            if (part.text && part.text.trim() !== '') {
+                apiParts.push({ text: part.text });
+            }
+            
+            return apiParts;
+        });
         
         if (parts.length > 0) {
             history.push({ role: msg.role, parts });

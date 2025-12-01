@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatSession, Message, ModelMode } from './types';
+import type { ChatSession, Message, ModelMode, MessagePart } from './types';
 import { generateResponseStream } from './services/geminiService';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
@@ -73,10 +73,31 @@ const App: React.FC = () => {
         cancel();
 
         setIsLoading(true);
+
+        const newParts: MessagePart[] = [];
+
+        // 1. If in Live Mode (autoSpeak), inject a hidden system instruction to reinforce "Don't describe" rule
+        if (autoSpeak && image) {
+            newParts.push({
+                text: "[SYSTEM: The attached image is your live visual feed. Do NOT describe it. Treat it as context only. Respond naturally to the user's voice.]",
+                isInternal: true
+            });
+        }
+
+        // 2. Add the Image part
+        if (image) {
+            newParts.push({ image });
+        }
+
+        // 3. Add the Text part
+        if (prompt) {
+            newParts.push({ text: prompt });
+        }
+
         const userMessage: Message = {
             id: uuidv4(),
             role: 'user',
-            parts: [{ text: prompt, ...(image && { image }) }],
+            parts: newParts,
             createdAt: new Date(),
         };
         

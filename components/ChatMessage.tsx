@@ -20,6 +20,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, ttsStat
     const { speak, isPlaying, isLoading: isTTSLoading } = ttsState;
     const isModel = role === 'model';
 
+    // Filter out internal system instructions so they don't show in the UI
+    const visibleParts = parts.filter(part => !part.isInternal);
+
     const parsedHtml = (text: string) => {
         const rawMarkup = marked.parse(text);
         // Sanitize to prevent XSS attacks
@@ -27,12 +30,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, ttsStat
     };
 
     const handleSpeak = () => {
-        const textToSpeak = parts.map(p => p.text).join(' ');
+        const textToSpeak = visibleParts.map(p => p.text).join(' ');
         if(textToSpeak) {
             speak(textToSpeak);
         }
     };
     
+    // If no visible parts (e.g. only internal system message), don't render an empty bubble
+    if (visibleParts.length === 0 && !isStreaming) return null;
+
     return (
         <div className={`flex gap-4 ${isModel ? '' : 'justify-start'}`}>
             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isModel ? 'bg-gradient-to-br from-blue-500 to-purple-600' : 'bg-slate-600'}`}>
@@ -41,7 +47,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, ttsStat
             <div className="flex flex-col flex-1 min-w-0">
                 <div className="font-bold text-slate-300 mb-1">{isModel ? 'Ari' : 'You'}</div>
                 <div className="space-y-4">
-                    {parts.map((part, index) => (
+                    {visibleParts.map((part, index) => (
                         <div key={index}>
                             {part.image && (
                                 <img
@@ -61,7 +67,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, ttsStat
                     {isStreaming && <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></div>}
                 </div>
                 
-                {isModel && !isStreaming && parts.some(p => p.text) && (
+                {isModel && !isStreaming && visibleParts.some(p => p.text) && (
                     <div className="mt-2">
                         <button onClick={handleSpeak} disabled={isTTSLoading || isPlaying} className="p-2 rounded-full hover:bg-slate-700 transition-colors text-slate-400 disabled:text-slate-600">
                              {isTTSLoading ? <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> :
