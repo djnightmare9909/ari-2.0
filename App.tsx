@@ -189,7 +189,7 @@ const App: React.FC = () => {
                 
                 {isLiveMode && (
                     <LivePerception 
-                        onVoiceInput={(text) => handleSend(text, null, true)}
+                        onVoiceInput={(text, image) => handleSend(text, image || null, true)}
                         onClose={() => {
                             setIsLiveMode(false);
                             cancel(); // Stop speaking when closing live mode

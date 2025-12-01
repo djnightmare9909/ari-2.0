@@ -4,7 +4,7 @@ import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
 import { Icon } from './Icon';
 
 interface LivePerceptionProps {
-    onVoiceInput: (text: string) => void;
+    onVoiceInput: (text: string, image?: { data: string; mimeType: string }) => void;
     onClose: () => void;
     stopAudio: () => void;
     isProcessing: boolean;
@@ -71,7 +71,7 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
     // 2. Start Camera & Speech
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); // Audio handled by SpeechRec
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false }); // Audio handled by SpeechRec
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 videoRef.current.addEventListener("loadeddata", predictWebcam);
@@ -80,6 +80,28 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
         } catch (err) {
             console.error("Camera error:", err);
         }
+    };
+
+    // Helper: Capture current video frame
+    const captureFrame = (): { data: string; mimeType: string } | undefined => {
+        if (!videoRef.current) return undefined;
+        const video = videoRef.current;
+        
+        // Create an offscreen canvas to capture the frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return undefined;
+        
+        // Draw the image unmirrored so the AI can read text/see correctly
+        ctx.drawImage(video, 0, 0);
+        
+        // Convert to base64
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const data = dataUrl.split(',')[1];
+        
+        return { data, mimeType: 'image/jpeg' };
     };
 
     // 3. Vision Loop
@@ -133,9 +155,6 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
 
         // INTERRUPTION LOGIC: If the user starts talking, silence the AI.
         recognition.onspeechstart = () => {
-            // Only stop if we are focusing, or maybe always?
-            // "it can't be in the middle of speaking while listening to me" implies strict turn-taking.
-            // If the microphone detects speech, we stop the AI.
             stopAudioRef.current();
         };
 
@@ -149,7 +168,12 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
                 if (attentionRef.current === 'focus') {
                     stopAudioRef.current(); // Ensure silence before processing
                     setLastTranscript(transcript);
-                    onVoiceInputRef.current(transcript);
+                    
+                    // Capture visual context
+                    const image = captureFrame();
+                    
+                    // Send to brain
+                    onVoiceInputRef.current(transcript, image);
                 } else {
                     console.log("Ignored speech (looking away):", transcript);
                 }
@@ -185,7 +209,7 @@ const LivePerception: React.FC<LivePerceptionProps> = ({ onVoiceInput, onClose, 
                     autoPlay 
                     playsInline
                     muted
-                    className="w-full h-full object-cover transform -scale-x-100" // Mirror effect
+                    className="w-full h-full object-cover transform -scale-x-100" // Mirror effect for user UI, but logic uses raw
                 />
                 
                 {/* HUD Overlay */}
