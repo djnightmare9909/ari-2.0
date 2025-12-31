@@ -1,5 +1,8 @@
 {
-  "name": "Ari Reasoning Engine",
+  "name": "Recursive Reasoning Engine",
   "description": "A sophisticated reasoning interface powered by Gemini, enabling complex, human-like thought and recursive interaction.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }

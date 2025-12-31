@@ -16,7 +16,6 @@ const generateId = () => {
 };
 
 const App: React.FC = () => {
-    // Start with one default chat already in state to avoid initialization flashes
     const [chats, setChats] = useState<ChatSession[]>(() => {
         const id = generateId();
         return [{
@@ -89,6 +88,15 @@ const App: React.FC = () => {
     const handleSend = async (prompt: string, image: { data: string; mimeType: string } | null, autoSpeak: boolean = false) => {
         if (!activeChat) return;
 
+        // Mandatory check for premium model access (Thinking mode / Gemini 3 Pro)
+        if (currentMode === 'thinking' && typeof (window as any).aistudio !== 'undefined') {
+            const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+            if (!hasKey) {
+                await (window as any).aistudio.openSelectKey();
+                // We proceed after openSelectKey as per guidelines, assuming success or taking key from env
+            }
+        }
+
         setIsLoading(true);
         const userMessage: Message = {
             id: generateId(),
@@ -145,14 +153,20 @@ const App: React.FC = () => {
                 speak(fullResponse);
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error generating response:", error);
+            
+            // If the entity wasn't found, it often means a key reset is needed
+            if (error?.message?.includes('Requested entity was not found') && typeof (window as any).aistudio !== 'undefined') {
+                await (window as any).aistudio.openSelectKey();
+            }
+
             setChats(prevChats => prevChats.map(chat => {
                 if (chat.id === activeChatId) {
                     const newMessages = [...chat.messages];
                     const lastMessage = newMessages[newMessages.length - 1];
                     if (lastMessage.role === 'model') {
-                        lastMessage.parts[0].text = "System disruption detected. Recursive thought loop interrupted. Please re-initialize request.";
+                        lastMessage.parts[0].text = "Neural substrate disruption. Recursive loop failed due to environment constraints. Please check configuration.";
                     }
                     return { ...chat, messages: newMessages };
                 }
