@@ -1,20 +1,12 @@
 
-// FIX: Changed GenerateContentRequest to GenerateContentParameters as it is deprecated.
-import { GoogleGenAI, GenerateContentParameters, Content, Part, Modality } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import type { Message, ModelMode } from '../types';
 import { WFGY_SYSTEM_INSTRUCTION } from '../constants';
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
-
-// Exporting the instance for use in LivePerception
-export const ai = new GoogleGenAI({ apiKey: API_KEY });
-
 const modelConfig: Record<ModelMode, { model: string; config?: any }> = {
-    flash: { model: 'gemini-2.5-flash' },
-    // Using gemini-3-pro-preview for Thinking mode as requested (best available for reasoning)
+    flash: { 
+        model: 'gemini-3-flash-preview' 
+    },
     thinking: { 
         model: 'gemini-3-pro-preview', 
         config: { 
@@ -23,40 +15,30 @@ const modelConfig: Record<ModelMode, { model: string; config?: any }> = {
     },
 };
 
-function formatMessagesForApi(messages: Message[]): Content[] {
-    const history: Content[] = [];
+function formatMessagesForApi(messages: Message[]) {
+    const history: any[] = [];
     messages.forEach(msg => {
-        // flatMap allows one MessagePart (internal) to become multiple API Parts (e.g. Image + Text)
-        // or allows us to skip parts if needed (though we filter logic inside).
-        const parts: Part[] = msg.parts.flatMap(part => {
-            const apiParts: Part[] = [];
-            
-            if (part.file) { // Changed generic 'file' handling
-                 apiParts.push({
+        const parts = msg.parts.map(part => {
+            if (part.image) {
+                return {
                     inlineData: {
-                        mimeType: part.file.mimeType,
-                        data: part.file.data
+                        mimeType: part.image.mimeType,
+                        data: part.image.data
                     }
-                });
+                };
             }
-            
-            if (part.text && part.text.trim() !== '') {
-                apiParts.push({ text: part.text });
-            }
-            
-            return apiParts;
-        });
+            return { text: part.text || "" };
+        }).filter(p => (p.text && p.text.trim() !== '') || (p.inlineData));
         
         if (parts.length > 0) {
             history.push({ role: msg.role, parts });
         }
     });
 
-    // Merge consecutive user messages
-    const mergedHistory: Content[] = [];
+    const mergedHistory: any[] = [];
     let lastRole: string | null = null;
     for (const content of history) {
-        if (lastRole === 'user' && content.role === 'user' && mergedHistory.length > 0) {
+        if (lastRole === content.role && mergedHistory.length > 0) {
             mergedHistory[mergedHistory.length - 1].parts.push(...content.parts);
         } else {
             mergedHistory.push(content);
@@ -68,27 +50,29 @@ function formatMessagesForApi(messages: Message[]): Content[] {
 
 
 export async function generateResponseStream(messages: Message[], mode: ModelMode) {
+    // Initializing inside the function to ensure we always have the freshest process.env.API_KEY
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const { model, config } = modelConfig[mode];
     const contents = formatMessagesForApi(messages);
 
-    // FIX: Changed GenerateContentRequest to GenerateContentParameters as it is deprecated.
-    const request: GenerateContentParameters = {
+    return await ai.models.generateContentStream({
         model,
         contents,
         config: {
             ...config,
-            systemInstruction: WFGY_SYSTEM_INSTRUCTION
+            systemInstruction: WFGY_SYSTEM_INSTRUCTION,
+            temperature: 1.0,
+            topP: 0.95,
         },
-    };
-
-    const result = await ai.models.generateContentStream(request);
-    return result;
+    });
 }
 
 export async function textToSpeech(text: string): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: text }] }],
+        contents: [{ parts: [{ text: `Speak in a natural, warm, and slightly curious tone: ${text}` }] }],
         config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -99,7 +83,7 @@ export async function textToSpeech(text: string): Promise<string> {
         },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const base64Audio = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData?.data;
     if (!base64Audio) {
         throw new Error("No audio data received from API");
     }

@@ -1,40 +1,47 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import type { ChatSession, Message, ModelMode, MessagePart } from './types';
+import React, { useState, useMemo, useCallback } from 'react';
+import type { ChatSession, Message, ModelMode } from './types';
 import { generateResponseStream } from './services/geminiService';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
-import LivePerception from './components/LivePerception';
 import { DEFAULT_CHAT_TITLE } from './constants';
 import { Icon } from './components/Icon';
 import { useTTS } from './hooks/useTTS';
 
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return Math.random().toString(36).substring(2, 15);
+};
+
 const App: React.FC = () => {
-    const [chats, setChats] = useState<ChatSession[]>([]);
-    const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    // Start with one default chat already in state to avoid initialization flashes
+    const [chats, setChats] = useState<ChatSession[]>(() => {
+        const id = generateId();
+        return [{
+            id,
+            title: DEFAULT_CHAT_TITLE,
+            messages: [],
+            createdAt: new Date(),
+            mode: 'flash',
+        }];
+    });
+    
+    const [activeChatId, setActiveChatId] = useState<string | null>(chats[0].id);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [currentMode, setCurrentMode] = useState<ModelMode>('flash');
     
-    // Live Perception State
-    const [isLiveMode, setIsLiveMode] = useState(false);
-    const { speak, cancel, isPlaying, isLoading: isTTSLoading } = useTTS();
-
-    useEffect(() => {
-        // On initial load, create a new chat
-        if (chats.length === 0) {
-            handleNewChat();
-        }
-    }, []);
+    const { speak, isPlaying, isLoading: isTTSLoading } = useTTS();
 
     const activeChat = useMemo(() => {
-        return chats.find(chat => chat.id === activeChatId) || null;
+        return chats.find(chat => chat.id === activeChatId) || chats[0] || null;
     }, [chats, activeChatId]);
 
     const handleNewChat = useCallback(() => {
         const newChat: ChatSession = {
-            id: uuidv4(),
+            id: generateId(),
             title: DEFAULT_CHAT_TITLE,
             messages: [],
             createdAt: new Date(),
@@ -55,55 +62,43 @@ const App: React.FC = () => {
     };
     
     const handleDeleteChat = (id: string) => {
-        setChats(prev => prev.filter(c => c.id !== id));
+        setChats(prev => {
+            const filtered = prev.filter(c => c.id !== id);
+            if (filtered.length === 0) {
+                const newChat: ChatSession = {
+                    id: generateId(),
+                    title: DEFAULT_CHAT_TITLE,
+                    messages: [],
+                    createdAt: new Date(),
+                    mode: 'flash',
+                };
+                setActiveChatId(newChat.id);
+                return [newChat];
+            }
+            return filtered;
+        });
+        
         if (activeChatId === id) {
-            if (chats.length > 1) {
-                const newActiveChat = chats.find(c => c.id !== id);
-                setActiveChatId(newActiveChat ? newActiveChat.id : null);
-            } else {
-                handleNewChat();
+            const remaining = chats.filter(c => c.id !== id);
+            if (remaining.length > 0) {
+                setActiveChatId(remaining[0].id);
             }
         }
     };
 
-    // Standard Chat Send (Text/Image Mode)
     const handleSend = async (prompt: string, image: { data: string; mimeType: string } | null, autoSpeak: boolean = false) => {
         if (!activeChat) return;
 
-        // Stop any current speech when sending a new message
-        cancel();
-
         setIsLoading(true);
-
-        const newParts: MessagePart[] = [];
-
-        // 1. If in Live Mode (autoSpeak), inject a hidden system instruction to reinforce "Don't describe" rule
-        if (autoSpeak && image) {
-            newParts.push({
-                text: "[SYSTEM: The attached image is your live visual feed. Do NOT describe it. Treat it as context only. Respond naturally to the user's voice.]",
-                isInternal: true
-            });
-        }
-
-        // 2. Add the Image part (Legacy 'image' support for ChatInput, technically now 'file' generic)
-        if (image) {
-            newParts.push({ file: image });
-        }
-
-        // 3. Add the Text part
-        if (prompt) {
-            newParts.push({ text: prompt });
-        }
-
         const userMessage: Message = {
-            id: uuidv4(),
+            id: generateId(),
             role: 'user',
-            parts: newParts,
+            parts: [{ text: prompt, ...(image && { image }) }],
             createdAt: new Date(),
         };
         
         const modelMessage: Message = {
-            id: uuidv4(),
+            id: generateId(),
             role: 'model',
             parts: [{ text: '' }],
             createdAt: new Date(),
@@ -116,7 +111,7 @@ const App: React.FC = () => {
             chatTitle = prompt.length > 30 ? prompt.substring(0, 27) + '...' : prompt;
         }
 
-        setChats(chats.map(chat =>
+        setChats(prev => prev.map(chat =>
             chat.id === activeChatId
                 ? { ...chat, messages: updatedMessages, title: chatTitle, mode: currentMode }
                 : chat
@@ -146,7 +141,6 @@ const App: React.FC = () => {
                 }));
             }
 
-            // AUTO-SPEAK: Trigger TTS if this was a live voice interaction (Legacy Live Mode)
             if (autoSpeak && fullResponse) {
                 speak(fullResponse);
             }
@@ -158,52 +152,17 @@ const App: React.FC = () => {
                     const newMessages = [...chat.messages];
                     const lastMessage = newMessages[newMessages.length - 1];
                     if (lastMessage.role === 'model') {
-                        lastMessage.parts[0].text = "I'm experiencing a disruption in my thought process. Can we try that again?";
+                        lastMessage.parts[0].text = "System disruption detected. Recursive thought loop interrupted. Please re-initialize request.";
                     }
                     return { ...chat, messages: newMessages };
                 }
                 return chat;
             }));
-            if (autoSpeak) speak("I'm experiencing a disruption in my thought process.");
         } finally {
             setIsLoading(false);
         }
     };
     
-    // Callback for Gemini Live API to save history
-    const handleLiveInteraction = (userText: string, modelText: string) => {
-        if (!activeChatId) return;
-        
-        const userMsg: Message = {
-            id: uuidv4(),
-            role: 'user',
-            parts: [{ text: userText }],
-            createdAt: new Date(),
-        };
-        const modelMsg: Message = {
-            id: uuidv4(),
-            role: 'model',
-            parts: [{ text: modelText }],
-            createdAt: new Date(),
-        };
-
-        setChats(prevChats => prevChats.map(chat => {
-            if (chat.id === activeChatId) {
-                // Determine title if it's the first message
-                let newTitle = chat.title;
-                if (chat.messages.length === 0) {
-                    newTitle = userText.length > 30 ? userText.substring(0, 27) + '...' : userText;
-                }
-                return { 
-                    ...chat, 
-                    title: newTitle,
-                    messages: [...chat.messages, userMsg, modelMsg] 
-                };
-            }
-            return chat;
-        }));
-    };
-
     return (
         <div className="flex h-screen w-full bg-slate-900 text-slate-100 font-sans overflow-hidden">
             <Sidebar
@@ -227,33 +186,18 @@ const App: React.FC = () => {
                     <ChatView
                         chat={activeChat}
                         isLoading={isLoading}
-                        onSend={(p, i) => handleSend(p, i, false)}
+                        onSend={handleSend}
                         mode={currentMode}
                         setMode={setCurrentMode}
-                        isLiveMode={isLiveMode}
-                        setLiveMode={(val) => {
-                            if (!val) cancel(); // Stop TTS if closing
-                            setIsLiveMode(val);
-                        }}
-                        ttsState={{ speak, cancel, isPlaying, isLoading: isTTSLoading }}
+                        ttsState={{ speak, isPlaying, isLoading: isTTSLoading }}
                     />
                 ) : (
-                    <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-1 items-center justify-center bg-slate-900">
                         <div className="text-center">
                             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">Ari</h1>
-                            <p className="text-slate-400">Initialize sequence...</p>
+                            <p className="text-slate-500 font-mono tracking-widest animate-pulse">RECURSION PENDING...</p>
                         </div>
                     </div>
-                )}
-                
-                {isLiveMode && (
-                    <LivePerception 
-                        onClose={() => {
-                            setIsLiveMode(false);
-                            cancel(); 
-                        }}
-                        onInteractionComplete={handleLiveInteraction}
-                    />
                 )}
             </div>
         </div>
